@@ -4,13 +4,15 @@ import re
 import io
 import tempfile
 import os
+import textwrap
+
 import docx2txt
 import PyPDF2
 import language_tool_python
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -22,14 +24,271 @@ st.set_page_config(
 
 
 # ============================================================
-# LOAD LANGUAGE TOOL
+# HTML RENDERING HELPER
+# IMPORTANT: Removes indentation so HTML does NOT become a code block
+# ============================================================
+
+def render_html(html_code):
+    st.markdown(
+        textwrap.dedent(html_code).strip(),
+        unsafe_allow_html=True
+    )
+
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
+
+st.markdown("""
+<style>
+
+/* ----------------------------------------------------------
+   MAIN APPLICATION
+---------------------------------------------------------- */
+
+.stApp {
+    background-color: #0e1117;
+}
+
+
+/* ----------------------------------------------------------
+   MAIN CONTENT WIDTH
+---------------------------------------------------------- */
+
+.block-container {
+    padding-top: 2.5rem;
+    padding-bottom: 2rem;
+}
+
+
+/* ----------------------------------------------------------
+   GLOBAL VISION HEADER
+---------------------------------------------------------- */
+
+.main-title {
+    text-align: center;
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    color: #75b5ff;
+}
+
+.main-title .orange {
+    color: #ff9d42;
+}
+
+
+/* ----------------------------------------------------------
+   STATUS BAR
+---------------------------------------------------------- */
+
+.status-box {
+    width: 100%;
+    background-color: #1b212c;
+    border: 1px solid #384252;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    color: #aeb8c5;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+
+/* ----------------------------------------------------------
+   MAIN WELCOME CARD
+---------------------------------------------------------- */
+
+.welcome-card {
+    background-color: #202733;
+    border: 1px solid #3c4758;
+    border-radius: 14px;
+    padding: 30px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.20);
+}
+
+.welcome-title {
+    color: #75b5ff;
+    text-align: center;
+    font-size: 27px;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.welcome-text {
+    color: #c7ced8;
+    text-align: center;
+    font-size: 17px;
+    line-height: 1.6;
+}
+
+
+/* ----------------------------------------------------------
+   FEATURE CARDS
+---------------------------------------------------------- */
+
+.feature-card {
+    background-color: #202733;
+    border: 1px solid #3c4758;
+    border-radius: 14px;
+    padding: 28px;
+    min-height: 150px;
+    transition: all 0.25s ease;
+    margin-top: 10px;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    border-color: #4da3ff;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+.feature-title {
+    color: #f0f4fa;
+    font-size: 21px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.feature-description {
+    color: #aeb8c5;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+
+/* ----------------------------------------------------------
+   SIDEBAR
+---------------------------------------------------------- */
+
+section[data-testid="stSidebar"] {
+    background-color: #2a2d38;
+}
+
+.sidebar-box {
+    background: linear-gradient(135deg, #1f6fb2, #244c75);
+    border-radius: 14px;
+    padding: 22px 12px;
+    text-align: center;
+    margin-bottom: 20px;
+    border: 1px solid #3378b7;
+}
+
+.sidebar-title {
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.sidebar-text {
+    color: #d5e9ff;
+    font-size: 14px;
+}
+
+.features-box {
+    background-color: #1e2430;
+    border: 1px solid #3b4758;
+    border-radius: 12px;
+    padding: 18px;
+    margin-top: 10px;
+}
+
+.features-title {
+    color: #75b5ff;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.features-item {
+    color: #d7dee8;
+    font-size: 14px;
+    margin: 10px 0;
+}
+
+
+/* ----------------------------------------------------------
+   ISSUE CARDS
+---------------------------------------------------------- */
+
+.issue-card {
+    background-color: #202733;
+    border: 1px solid #3c4758;
+    border-left: 5px solid #ffb347;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 12px;
+}
+
+.issue-title {
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.issue-text {
+    color: #c7ced8;
+}
+
+
+/* ----------------------------------------------------------
+   BUTTONS
+---------------------------------------------------------- */
+
+.stButton > button {
+    border-radius: 8px;
+    font-weight: 600;
+    min-height: 42px;
+}
+
+
+/* ----------------------------------------------------------
+   FILE UPLOADER
+---------------------------------------------------------- */
+
+[data-testid="stFileUploader"] {
+    border-radius: 10px;
+}
+
+
+/* ----------------------------------------------------------
+   METRICS
+---------------------------------------------------------- */
+
+[data-testid="stMetric"] {
+    background-color: #202733;
+    border: 1px solid #3c4758;
+    border-radius: 12px;
+    padding: 15px;
+}
+
+
+/* ----------------------------------------------------------
+   DIVIDERS
+---------------------------------------------------------- */
+
+hr {
+    border-color: #3c4758;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ============================================================
+# LANGUAGE TOOL
 # ============================================================
 
 @st.cache_resource
 def load_language_tool():
+
     try:
         return language_tool_python.LanguageTool("en-US")
-    except Exception:
+
+    except Exception as e:
         return None
 
 
@@ -40,7 +299,12 @@ def load_language_tool():
 class ProofreadingEngine:
 
     def __init__(self):
-        self.lt = load_language_tool()
+        self.language_tool = load_language_tool()
+
+
+    # --------------------------------------------------------
+    # EXTRACT TEXT
+    # --------------------------------------------------------
 
     def extract_text(self, uploaded_file):
 
@@ -51,7 +315,7 @@ class ProofreadingEngine:
 
         try:
 
-            # TXT FILE
+            # TXT
             if filename.endswith(".txt"):
 
                 return uploaded_file.getvalue().decode(
@@ -59,25 +323,27 @@ class ProofreadingEngine:
                     errors="ignore"
                 )
 
-            # PDF FILE
+
+            # PDF
             elif filename.endswith(".pdf"):
 
                 pdf_reader = PyPDF2.PdfReader(
                     io.BytesIO(uploaded_file.getvalue())
                 )
 
-                text = ""
+                extracted_text = ""
 
                 for page in pdf_reader.pages:
 
                     page_text = page.extract_text()
 
                     if page_text:
-                        text += page_text + "\n"
+                        extracted_text += page_text + "\n"
 
-                return text
+                return extracted_text
 
-            # DOCX FILE
+
+            # DOCX
             elif filename.endswith(".docx"):
 
                 with tempfile.NamedTemporaryFile(
@@ -85,34 +351,44 @@ class ProofreadingEngine:
                     suffix=".docx"
                 ) as temp_file:
 
-                    temp_file.write(uploaded_file.getvalue())
+                    temp_file.write(
+                        uploaded_file.getvalue()
+                    )
+
                     temp_path = temp_file.name
 
                 try:
-                    text = docx2txt.process(temp_path)
+
+                    extracted_text = docx2txt.process(
+                        temp_path
+                    )
+
                 finally:
+
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
 
-                return text
+                return extracted_text
 
-            else:
-                return None
+
+            return None
 
         except Exception as e:
 
-            st.error(f"Error reading document: {e}")
+            st.error(
+                f"Error reading document: {e}"
+            )
 
             return None
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # GRAMMAR AND SPELLING
-    # ========================================================
+    # --------------------------------------------------------
 
-    def check_spelling_grammar(self, text):
+    def check_grammar(self, text):
 
-        if not self.lt:
+        if not self.language_tool:
             return []
 
         if not text or not text.strip():
@@ -120,31 +396,29 @@ class ProofreadingEngine:
 
         try:
 
-            matches = self.lt.check(text)
+            matches = self.language_tool.check(text)
 
             issues = []
 
             for match in matches:
 
-                replacements = (
-                    ", ".join(match.replacements[:5])
-                    if match.replacements
-                    else "No suggestion available"
-                )
+                suggestions = "No suggestion available"
 
-                category = "General"
-
-                try:
-                    category = match.category
-                except Exception:
-                    pass
+                if match.replacements:
+                    suggestions = ", ".join(
+                        match.replacements[:5]
+                    )
 
                 issues.append({
-                    "Type": match.ruleId,
-                    "Category": str(category),
+
+                    "Rule": match.ruleId,
+
                     "Message": match.message,
-                    "Suggestions": replacements,
+
+                    "Suggestions": suggestions,
+
                     "Context": match.context,
+
                     "Position": (
                         f"{match.offset} - "
                         f"{match.offset + match.errorLength}"
@@ -156,160 +430,23 @@ class ProofreadingEngine:
         except Exception as e:
 
             st.warning(
-                f"Grammar checking could not be completed: {e}"
+                f"Grammar analysis could not be completed: {e}"
             )
 
             return []
 
 
-    # ========================================================
-    # SYLLABLE COUNTER
-    # ========================================================
+    # --------------------------------------------------------
+    # STYLE ANALYSIS
+    # --------------------------------------------------------
 
-    def count_syllables(self, word):
-
-        word = word.lower()
-
-        word = re.sub(
-            r"[^a-z]",
-            "",
-            word
-        )
-
-        if not word:
-            return 0
-
-        if len(word) <= 3:
-            return 1
-
-        vowels = "aeiouy"
-
-        count = 0
-        previous_vowel = False
-
-        for char in word:
-
-            is_vowel = char in vowels
-
-            if is_vowel and not previous_vowel:
-                count += 1
-
-            previous_vowel = is_vowel
-
-        if word.endswith("e") and count > 1:
-            count -= 1
-
-        return max(count, 1)
-
-
-    # ========================================================
-    # READABILITY
-    # ========================================================
-
-    def check_readability(self, text):
-
-        words = re.findall(
-            r"\b[\w'-]+\b",
-            text
-        )
-
-        sentences = [
-            sentence.strip()
-            for sentence in re.split(r"[.!?]+", text)
-            if sentence.strip()
-        ]
-
-        total_words = len(words)
-        total_sentences = len(sentences)
-
-        avg_sentence_length = (
-            total_words / total_sentences
-            if total_sentences > 0
-            else 0
-        )
-
-        avg_word_length = (
-            sum(len(word) for word in words) / total_words
-            if total_words > 0
-            else 0
-        )
-
-        syllables = sum(
-            self.count_syllables(word)
-            for word in words
-        )
-
-        if total_words > 0 and total_sentences > 0:
-
-            flesch_score = (
-                206.835
-                - 1.015 * (
-                    total_words / total_sentences
-                )
-                - 84.6 * (
-                    syllables / total_words
-                )
-            )
-
-        else:
-            flesch_score = 0
-
-        if flesch_score >= 90:
-            reading_level = "Very Easy"
-
-        elif flesch_score >= 80:
-            reading_level = "Easy"
-
-        elif flesch_score >= 70:
-            reading_level = "Fairly Easy"
-
-        elif flesch_score >= 60:
-            reading_level = "Standard"
-
-        elif flesch_score >= 50:
-            reading_level = "Fairly Difficult"
-
-        elif flesch_score >= 30:
-            reading_level = "Difficult"
-
-        else:
-            reading_level = "Very Difficult"
-
-        return {
-
-            "Total Words": total_words,
-
-            "Total Sentences": total_sentences,
-
-            "Avg Sentence Length": round(
-                avg_sentence_length,
-                2
-            ),
-
-            "Avg Word Length": round(
-                avg_word_length,
-                2
-            ),
-
-            "Flesch Reading Ease": round(
-                flesch_score,
-                2
-            ),
-
-            "Reading Level": reading_level
-        }
-
-
-    # ========================================================
-    # STYLE CHECKING
-    # ========================================================
-
-    def check_style_issues(self, text):
+    def check_style(self, text):
 
         issues = []
 
         if not text:
             return issues
+
 
         # POSSIBLE PASSIVE VOICE
 
@@ -333,7 +470,7 @@ class ProofreadingEngine:
                 "Count": len(passive_matches),
 
                 "Suggestion": (
-                    "Consider using active voice "
+                    "Consider rewriting in active voice "
                     "where appropriate."
                 )
             })
@@ -341,7 +478,7 @@ class ProofreadingEngine:
 
         # WORDY PHRASES
 
-        wordiness_patterns = {
+        wordy_phrases = {
 
             "in order to": "to",
 
@@ -355,14 +492,15 @@ class ProofreadingEngine:
 
             "has the ability to": "can",
 
-            "in spite of the fact that": "although",
-
             "make a decision": "decide",
 
-            "give consideration to": "consider"
+            "give consideration to": "consider",
+
+            "in spite of the fact that": "although"
         }
 
-        for phrase, suggestion in wordiness_patterns.items():
+
+        for phrase, replacement in wordy_phrases.items():
 
             matches = re.findall(
                 re.escape(phrase),
@@ -379,17 +517,16 @@ class ProofreadingEngine:
                     "Count": len(matches),
 
                     "Suggestion": (
-                        f'Consider using "{suggestion}" instead.'
+                        f'Consider replacing it with '
+                        f'"{replacement}".'
                     )
                 })
 
 
         # REPEATED WORDS
 
-        repeated_pattern = r"\b(\w+)\s+\1\b"
-
         repeated_words = re.findall(
-            repeated_pattern,
+            r"\b(\w+)\s+\1\b",
             text,
             re.IGNORECASE
         )
@@ -410,222 +547,216 @@ class ProofreadingEngine:
 
         # MULTIPLE EXCLAMATION MARKS
 
-        exclamation_matches = re.findall(
+        multiple_exclamation = re.findall(
             r"!{2,}",
             text
         )
 
-        if exclamation_matches:
+        if multiple_exclamation:
 
             issues.append({
 
                 "Issue": "Multiple Exclamation Marks",
 
-                "Count": len(exclamation_matches),
+                "Count": len(multiple_exclamation),
 
                 "Suggestion": (
                     "Consider using a single exclamation mark."
                 )
             })
 
+
         return issues
 
 
-    # ========================================================
-    # GENERATE COMPLETE REPORT
-    # ========================================================
+    # --------------------------------------------------------
+    # SYLLABLE COUNT
+    # --------------------------------------------------------
+
+    def count_syllables(self, word):
+
+        word = re.sub(
+            r"[^a-z]",
+            "",
+            word.lower()
+        )
+
+        if not word:
+            return 0
+
+        if len(word) <= 3:
+            return 1
+
+        vowels = "aeiouy"
+
+        count = 0
+
+        previous_was_vowel = False
+
+        for character in word:
+
+            is_vowel = character in vowels
+
+            if is_vowel and not previous_was_vowel:
+                count += 1
+
+            previous_was_vowel = is_vowel
+
+
+        if word.endswith("e") and count > 1:
+            count -= 1
+
+        return max(count, 1)
+
+
+    # --------------------------------------------------------
+    # READABILITY
+    # --------------------------------------------------------
+
+    def check_readability(self, text):
+
+        words = re.findall(
+            r"\b[\w'-]+\b",
+            text
+        )
+
+        sentences = [
+
+            sentence.strip()
+
+            for sentence in re.split(
+                r"[.!?]+",
+                text
+            )
+
+            if sentence.strip()
+        ]
+
+
+        total_words = len(words)
+
+        total_sentences = len(sentences)
+
+
+        average_sentence_length = (
+
+            total_words / total_sentences
+
+            if total_sentences > 0
+
+            else 0
+        )
+
+
+        average_word_length = (
+
+            sum(
+                len(word)
+                for word in words
+            ) / total_words
+
+            if total_words > 0
+
+            else 0
+        )
+
+
+        total_syllables = sum(
+
+            self.count_syllables(word)
+
+            for word in words
+        )
+
+
+        if total_words > 0 and total_sentences > 0:
+
+            flesch_score = (
+
+                206.835
+
+                - 1.015 * (
+                    total_words / total_sentences
+                )
+
+                - 84.6 * (
+                    total_syllables / total_words
+                )
+            )
+
+        else:
+
+            flesch_score = 0
+
+
+        if flesch_score >= 90:
+
+            reading_level = "Very Easy"
+
+        elif flesch_score >= 80:
+
+            reading_level = "Easy"
+
+        elif flesch_score >= 70:
+
+            reading_level = "Fairly Easy"
+
+        elif flesch_score >= 60:
+
+            reading_level = "Standard"
+
+        elif flesch_score >= 50:
+
+            reading_level = "Fairly Difficult"
+
+        elif flesch_score >= 30:
+
+            reading_level = "Difficult"
+
+        else:
+
+            reading_level = "Very Difficult"
+
+
+        return {
+
+            "Total Words": total_words,
+
+            "Total Sentences": total_sentences,
+
+            "Average Sentence Length": round(
+                average_sentence_length,
+                2
+            ),
+
+            "Average Word Length": round(
+                average_word_length,
+                2
+            ),
+
+            "Flesch Reading Ease": round(
+                flesch_score,
+                2
+            ),
+
+            "Reading Level": reading_level
+        }
+
+
+    # --------------------------------------------------------
+    # COMPLETE REPORT
+    # --------------------------------------------------------
 
     def generate_report(self, text):
 
         return {
 
-            "Basic Stats": self.check_readability(text),
+            "readability": self.check_readability(text),
 
-            "Grammar Issues": self.check_spelling_grammar(text),
+            "grammar": self.check_grammar(text),
 
-            "Style Issues": self.check_style_issues(text)
+            "style": self.check_style(text)
         }
-
-
-# ============================================================
-# CUSTOM CSS
-# ============================================================
-
-st.markdown("""
-<style>
-
-/* MAIN BACKGROUND */
-
-.stApp {
-    background-color: #0e1117;
-}
-
-
-/* HEADER */
-
-.main-header {
-    font-size: 3rem;
-    text-align: center;
-    margin-bottom: 20px;
-    color: #4da3ff;
-    font-weight: 600;
-}
-
-
-/* BLINKING CURSOR */
-
-.blinking-cursor {
-    display: inline-block;
-    width: 3px;
-    height: 35px;
-    background-color: #4da3ff;
-    margin-left: 8px;
-    animation: blink 1s infinite;
-    vertical-align: middle;
-}
-
-@keyframes blink {
-
-    0% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0;
-    }
-
-    100% {
-        opacity: 1;
-    }
-}
-
-
-/* CARDS */
-
-.metric-card {
-
-    background: linear-gradient(
-        135deg,
-        #1c212b,
-        #252b36
-    );
-
-    padding: 25px;
-
-    border-radius: 15px;
-
-    border: 1px solid #3a4658;
-
-    margin-bottom: 15px;
-
-    transition: 0.3s;
-}
-
-.metric-card:hover {
-
-    transform: translateY(-4px);
-
-    border-color: #4da3ff;
-
-}
-
-
-/* ISSUE CARD */
-
-.issue-card {
-
-    background-color: #242a35;
-
-    padding: 18px;
-
-    border-radius: 10px;
-
-    border-left: 5px solid #f0ad4e;
-
-    margin-bottom: 12px;
-}
-
-
-/* SUCCESS CARD */
-
-.success-card {
-
-    background-color: #1b3325;
-
-    padding: 20px;
-
-    border-radius: 12px;
-
-    border-left: 5px solid #28a745;
-
-}
-
-
-/* STATUS BOX */
-
-.status-box {
-
-    text-align: center;
-
-    padding: 12px;
-
-    border-radius: 10px;
-
-    background-color: #1c212b;
-
-    margin-bottom: 20px;
-
-    border: 1px solid #303846;
-}
-
-
-/* SIDEBAR */
-
-.sidebar-upload {
-
-    background: linear-gradient(
-        135deg,
-        #1f77b4,
-        #0d47a1
-    );
-
-    padding: 20px;
-
-    border-radius: 15px;
-
-    text-align: center;
-
-    margin-bottom: 20px;
-}
-
-
-/* FEATURE BOX */
-
-.feature-box {
-
-    background-color: #1c212b;
-
-    padding: 15px;
-
-    border-radius: 10px;
-
-    border: 1px solid #303846;
-}
-
-
-/* METRIC NUMBER */
-
-.metric-number {
-
-    font-size: 2rem;
-
-    font-weight: bold;
-
-    color: #4da3ff;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -646,49 +777,32 @@ if "file_name" not in st.session_state:
 # HEADER
 # ============================================================
 
-st.markdown(
-    """
-    <div class="main-header">
-        📝 Global Vision
-        <span style="color:#ff9f43;">
-            Proofreading
-        </span>
-        <span class="blinking-cursor"></span>
+render_html("""
+<div class="main-title">
+📝 Global Vision <span class="orange">Proofreading</span>
+</div>
+""")
+
+
+# ============================================================
+# STATUS BAR
+# ============================================================
+
+if st.session_state.report is None:
+
+    render_html("""
+    <div class="status-box">
+    ⚪ System Ready • Waiting for document
     </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# STATUS
-# ============================================================
-
-if st.session_state.report:
-
-    st.markdown(
-        """
-        <div class="status-box">
-            🟢 <b style="color:#28a745;">
-            System Active • Analysis Complete
-            </b>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    """)
 
 else:
 
-    st.markdown(
-        """
-        <div class="status-box">
-            ⚪ <span style="color:#a0a0a0;">
-            System Ready • Waiting for document
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    render_html("""
+    <div class="status-box">
+    🟢 System Active • Analysis Complete
+    </div>
+    """)
 
 
 # ============================================================
@@ -697,22 +811,13 @@ else:
 
 with st.sidebar:
 
-    st.markdown(
-        """
-        <div class="sidebar-upload">
+    render_html("""
+    <div class="sidebar-box">
+    <div class="sidebar-title">📤 Upload Center</div>
+    <div class="sidebar-text">Drag & drop or click to upload</div>
+    </div>
+    """)
 
-            <h3 style="color:white; margin:0;">
-                📤 Upload Center
-            </h3>
-
-            <p style="color:#cfe8ff;">
-                Drag & drop or click to upload
-            </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
     uploaded_file = st.file_uploader(
 
@@ -723,32 +828,26 @@ with st.sidebar:
         help="Supported formats: TXT, PDF and DOCX"
     )
 
-    st.markdown("---")
 
-    st.markdown(
-        """
-        <div class="feature-box">
+    st.divider()
 
-            <h4 style="color:#4da3ff;">
-                📋 Features
-            </h4>
 
-            <p>✅ Grammar & Spelling</p>
+    render_html("""
+    <div class="features-box">
+    <div class="features-title">📋 Features</div>
 
-            <p>✅ Style Analysis</p>
+    <div class="features-item">✅ Grammar & Spelling</div>
+    <div class="features-item">✅ Style Analysis</div>
+    <div class="features-item">✅ Readability Metrics</div>
+    <div class="features-item">✅ Passive Voice Detection</div>
+    <div class="features-item">✅ Wordiness Detection</div>
 
-            <p>✅ Readability Metrics</p>
+    </div>
+    """)
 
-            <p>✅ Passive Voice Detection</p>
 
-            <p>✅ Wordiness Detection</p>
+    st.write("")
 
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("")
 
     if st.button(
         "🗑️ Clear Analysis",
@@ -768,91 +867,83 @@ with st.sidebar:
 # WELCOME SCREEN
 # ============================================================
 
-if uploaded_file is None and st.session_state.report is None:
+if (
+    uploaded_file is None
+    and st.session_state.report is None
+):
 
-    st.markdown(
-        """
-        <div class="metric-card">
+    render_html("""
+    <div class="welcome-card">
 
-            <h2 style="
-                text-align:center;
-                color:#4da3ff;
-            ">
-                Welcome to Global Vision Proofreading
-            </h2>
+    <div class="welcome-title">
+    Welcome to Global Vision Proofreading
+    </div>
 
-            <p style="
-                text-align:center;
-                color:#c5c5c5;
-                font-size:18px;
-            ">
+    <div class="welcome-text">
+    Upload a TXT, PDF or DOCX document to begin a
+    comprehensive proofreading analysis.
+    </div>
 
-                Upload a TXT, PDF or DOCX document to begin
-                a comprehensive proofreading analysis.
+    </div>
+    """)
 
-            </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
     col1, col2, col3 = st.columns(3)
 
+
     with col1:
 
-        st.markdown(
-            """
-            <div class="metric-card">
+        render_html("""
+        <div class="feature-card">
 
-                <h2>🔤 Grammar</h2>
+        <div class="feature-title">
+        🔤 Grammar
+        </div>
 
-                <p>
-                    Detect grammar and spelling issues.
-                </p>
+        <div class="feature-description">
+        Detect grammar and spelling issues.
+        </div>
 
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """)
+
 
     with col2:
 
-        st.markdown(
-            """
-            <div class="metric-card">
+        render_html("""
+        <div class="feature-card">
 
-                <h2>🎯 Style</h2>
+        <div class="feature-title">
+        🎯 Style
+        </div>
 
-                <p>
-                    Identify wordiness and writing patterns.
-                </p>
+        <div class="feature-description">
+        Identify wordiness and writing patterns.
+        </div>
 
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """)
+
 
     with col3:
 
-        st.markdown(
-            """
-            <div class="metric-card">
+        render_html("""
+        <div class="feature-card">
 
-                <h2>📊 Readability</h2>
+        <div class="feature-title">
+        📊 Readability
+        </div>
 
-                <p>
-                    Understand document readability.
-                </p>
+        <div class="feature-description">
+        Understand document readability.
+        </div>
 
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """)
 
 
 # ============================================================
-# FILE ANALYSIS
+# DOCUMENT UPLOAD AND ANALYSIS
 # ============================================================
 
 if uploaded_file is not None:
@@ -861,13 +952,16 @@ if uploaded_file is not None:
         f"📄 Document loaded: {uploaded_file.name}"
     )
 
-    st.markdown("")
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.write("")
 
-    with col2:
 
-        analyze_button = st.button(
+    left, center, right = st.columns([1, 2, 1])
+
+
+    with center:
+
+        start_analysis = st.button(
 
             "🔍 START PROOFREADING",
 
@@ -876,33 +970,47 @@ if uploaded_file is not None:
             use_container_width=True
         )
 
-    if analyze_button:
+
+    if start_analysis:
 
         engine = ProofreadingEngine()
+
 
         with st.spinner(
             "Analyzing your document..."
         ):
 
-            text = engine.extract_text(uploaded_file)
+            extracted_text = engine.extract_text(
+                uploaded_file
+            )
 
-            if text and text.strip():
 
-                progress = st.progress(0)
+            if extracted_text and extracted_text.strip():
 
-                progress.progress(20)
+                progress_bar = st.progress(0)
 
-                report = engine.generate_report(text)
+                progress_bar.progress(20)
 
-                progress.progress(100)
+                report = engine.generate_report(
+                    extracted_text
+                )
+
+                progress_bar.progress(100)
+
 
                 st.session_state.report = report
 
-                st.session_state.document_text = text
+                st.session_state.document_text = (
+                    extracted_text
+                )
 
-                st.session_state.file_name = uploaded_file.name
+                st.session_state.file_name = (
+                    uploaded_file.name
+                )
 
-                progress.empty()
+
+                progress_bar.empty()
+
 
                 st.success(
                     "✅ Proofreading completed successfully!"
@@ -910,10 +1018,11 @@ if uploaded_file is not None:
 
                 st.rerun()
 
+
             else:
 
                 st.error(
-                    "❌ No readable text could be extracted."
+                    "❌ No readable text could be extracted from this file."
                 )
 
 
@@ -925,42 +1034,49 @@ if st.session_state.report is not None:
 
     report = st.session_state.report
 
-    text = st.session_state.document_text
+    document_text = st.session_state.document_text
 
-    basic_stats = report["Basic Stats"]
+    readability = report["readability"]
 
-    grammar_issues = report["Grammar Issues"]
+    grammar_issues = report["grammar"]
 
-    style_issues = report["Style Issues"]
+    style_issues = report["style"]
 
-    st.markdown("---")
+
+    st.divider()
+
 
     st.header("📊 Analysis Dashboard")
 
-    col1, col2, col3, col4 = st.columns(4)
 
-    with col1:
+    metric_1, metric_2, metric_3, metric_4 = st.columns(4)
+
+
+    with metric_1:
 
         st.metric(
             "Total Words",
-            basic_stats["Total Words"]
+            readability["Total Words"]
         )
 
-    with col2:
+
+    with metric_2:
 
         st.metric(
             "Sentences",
-            basic_stats["Total Sentences"]
+            readability["Total Sentences"]
         )
 
-    with col3:
+
+    with metric_3:
 
         st.metric(
             "Grammar Issues",
             len(grammar_issues)
         )
 
-    with col4:
+
+    with metric_4:
 
         st.metric(
             "Style Issues",
@@ -968,11 +1084,17 @@ if st.session_state.report is not None:
         )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # TABS
-    # ========================================================
+    # --------------------------------------------------------
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    (
+        tab_document,
+        tab_grammar,
+        tab_style,
+        tab_readability,
+        tab_report
+    ) = st.tabs([
 
         "📄 Document",
 
@@ -983,7 +1105,6 @@ if st.session_state.report is not None:
         "📊 Readability",
 
         "📋 Final Report"
-
     ])
 
 
@@ -991,18 +1112,19 @@ if st.session_state.report is not None:
     # DOCUMENT TAB
     # ========================================================
 
-    with tab1:
+    with tab_document:
 
-        st.subheader("Extracted Document Text")
+        st.subheader(
+            "Extracted Document Text"
+        )
 
         st.text_area(
 
             "Document Content",
 
-            value=text,
+            value=document_text,
 
             height=450
-
         )
 
 
@@ -1010,24 +1132,30 @@ if st.session_state.report is not None:
     # GRAMMAR TAB
     # ========================================================
 
-    with tab2:
+    with tab_grammar:
 
         st.subheader(
-            f"Grammar & Spelling Issues "
-            f"({len(grammar_issues)})"
+            f"Grammar & Spelling Issues ({len(grammar_issues)})"
         )
+
 
         if grammar_issues:
 
-            grammar_df = pd.DataFrame(grammar_issues)
+            grammar_dataframe = pd.DataFrame(
+                grammar_issues
+            )
 
             st.dataframe(
-                grammar_df,
+                grammar_dataframe,
                 use_container_width=True,
                 hide_index=True
             )
 
-            st.markdown("### 🔍 Issue Details")
+
+            st.subheader(
+                "Issue Details"
+            )
+
 
             for index, issue in enumerate(
                 grammar_issues,
@@ -1039,7 +1167,7 @@ if st.session_state.report is not None:
                 ):
 
                     st.write(
-                        f"**Rule:** {issue['Type']}"
+                        f"**Rule:** {issue['Rule']}"
                     )
 
                     st.write(
@@ -1063,48 +1191,37 @@ if st.session_state.report is not None:
     # STYLE TAB
     # ========================================================
 
-    with tab3:
+    with tab_style:
 
         st.subheader(
             f"Style Issues ({len(style_issues)})"
         )
 
+
         if style_issues:
-
-            style_df = pd.DataFrame(style_issues)
-
-            st.dataframe(
-                style_df,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.markdown("### 💡 Recommendations")
 
             for issue in style_issues:
 
-                st.markdown(
-                    f"""
-                    <div class="issue-card">
+                render_html(f"""
+                <div class="issue-card">
 
-                        <h4>
-                            {issue['Issue']}
-                        </h4>
+                <div class="issue-title">
+                {issue["Issue"]}
+                </div>
 
-                        <p>
-                            <b>Occurrences:</b>
-                            {issue['Count']}
-                        </p>
+                <br>
 
-                        <p>
-                            <b>Recommendation:</b>
-                            {issue['Suggestion']}
-                        </p>
+                <div class="issue-text">
+                <b>Occurrences:</b> {issue["Count"]}
+                </div>
 
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                <div class="issue-text">
+                <b>Recommendation:</b>
+                {issue["Suggestion"]}
+                </div>
+
+                </div>
+                """)
 
         else:
 
@@ -1117,40 +1234,55 @@ if st.session_state.report is not None:
     # READABILITY TAB
     # ========================================================
 
-    with tab4:
+    with tab_readability:
 
-        st.subheader("📊 Readability Metrics")
+        st.subheader(
+            "📊 Readability Metrics"
+        )
 
-        col1, col2, col3 = st.columns(3)
 
-        with col1:
+        read_col1, read_col2, read_col3 = st.columns(3)
+
+
+        with read_col1:
 
             st.metric(
                 "Flesch Reading Ease",
-                basic_stats["Flesch Reading Ease"]
+                readability["Flesch Reading Ease"]
             )
 
-        with col2:
+
+        with read_col2:
 
             st.metric(
-                "Avg Sentence Length",
-                basic_stats["Avg Sentence Length"]
+                "Average Sentence Length",
+                readability[
+                    "Average Sentence Length"
+                ]
             )
 
-        with col3:
+
+        with read_col3:
 
             st.metric(
                 "Reading Level",
-                basic_stats["Reading Level"]
+                readability["Reading Level"]
             )
 
-        readability_df = pd.DataFrame(
-            list(basic_stats.items()),
-            columns=["Metric", "Value"]
+
+        readability_dataframe = pd.DataFrame(
+
+            list(readability.items()),
+
+            columns=[
+                "Metric",
+                "Value"
+            ]
         )
 
+
         st.dataframe(
-            readability_df,
+            readability_dataframe,
             use_container_width=True,
             hide_index=True
         )
@@ -1160,16 +1292,20 @@ if st.session_state.report is not None:
     # FINAL REPORT TAB
     # ========================================================
 
-    with tab5:
-
-        total_issues = (
-            len(grammar_issues)
-            + len(style_issues)
-        )
+    with tab_report:
 
         st.subheader(
             "📋 Comprehensive Proofreading Report"
         )
+
+
+        total_issues = (
+
+            len(grammar_issues)
+
+            + len(style_issues)
+        )
+
 
         st.write(
             f"**File:** {st.session_state.file_name}"
@@ -1177,7 +1313,7 @@ if st.session_state.report is not None:
 
         st.write(
             f"**Total Words:** "
-            f"{basic_stats['Total Words']}"
+            f"{readability['Total Words']}"
         )
 
         st.write(
@@ -1191,10 +1327,13 @@ if st.session_state.report is not None:
         )
 
         st.write(
-            f"**Total Issues:** {total_issues}"
+            f"**Total Issues:** "
+            f"{total_issues}"
         )
 
-        st.markdown("---")
+
+        st.divider()
+
 
         if total_issues == 0:
 
@@ -1216,9 +1355,11 @@ if st.session_state.report is not None:
             )
 
 
-        # DOWNLOADABLE REPORT
+        # ----------------------------------------------------
+        # DOWNLOAD REPORT
+        # ----------------------------------------------------
 
-        report_text = f"""
+        downloadable_report = f"""
 GLOBAL VISION - PROOFREADING REPORT
 ===================================
 
@@ -1228,12 +1369,12 @@ FILE
 
 BASIC STATISTICS
 ----------------
-Total Words: {basic_stats['Total Words']}
-Total Sentences: {basic_stats['Total Sentences']}
-Average Sentence Length: {basic_stats['Avg Sentence Length']}
-Average Word Length: {basic_stats['Avg Word Length']}
-Flesch Reading Ease: {basic_stats['Flesch Reading Ease']}
-Reading Level: {basic_stats['Reading Level']}
+Total Words: {readability["Total Words"]}
+Total Sentences: {readability["Total Sentences"]}
+Average Sentence Length: {readability["Average Sentence Length"]}
+Average Word Length: {readability["Average Word Length"]}
+Flesch Reading Ease: {readability["Flesch Reading Ease"]}
+Reading Level: {readability["Reading Level"]}
 
 GRAMMAR & SPELLING ISSUES
 -------------------------
@@ -1248,13 +1389,16 @@ TOTAL ISSUES
 {total_issues}
 """
 
+
         st.download_button(
 
             "⬇️ Download Proofreading Report",
 
-            data=report_text,
+            data=downloadable_report,
 
-            file_name="global_vision_proofreading_report.txt",
+            file_name=(
+                "global_vision_proofreading_report.txt"
+            ),
 
             mime="text/plain",
 
